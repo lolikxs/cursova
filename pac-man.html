@@ -7,7 +7,9 @@
 		<style>
 			canvas {
 			    border: 1px solid black; /* Додаємо чорну рамку до canvas для видимості */
-			    background-color: lightgrey; /* Даємо ледь сірий фон, щоб краще було видно жовтого пакмена */
+			    background-color: lightgray;
+ 
+
 			}
 			#score, #record {
 			    font-size: 20px;
@@ -48,10 +50,37 @@
 				[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ],
 				
 			];
+			const SETTINGS = {
+	stare: {
+		chance: 0.15,   // 15% шанс
+		minScore: 50,
+		interval: 5000  // перевірка кожні 5 сек
+	},
+	horror: {
+		chance: 0.25,   // 25% шанс
+		minScore: 150,
+		interval: 4000  // перевірка кожні 4 сек
+	}
+};
+			
+
 let lookAtPlayer = false;
 let gameFrozen = false;
 let fruit =[]
+let horrorMode = false;
+let stareMode = false;
+let horrorTexts = [
+    "WHY ARE YOU STILL HERE?",
+    "Leave ME alone please PLEASE!!!",
+    "i always come back",
+	".....",
+	"help M...."
+	
+];
+
+let ghostStartPositions = [];
 let ghost1 = {
+
 	x: 8 * cellSize + cellSize / 2,
 	y: 1 * cellSize + cellSize / 2,
     radius: 10,
@@ -77,6 +106,31 @@ let ghost3 = {
 };
 let ghost2Active = false;
 let ghost3Active = false;
+let horrorInterval;
+
+function startHorrorEffects() {
+	horrorInterval = setInterval(() => {
+
+		let isBlack = document.body.style.backgroundColor === "black";
+
+		if (isBlack) {
+			// повертаємо нормальний стан
+			document.body.style.backgroundColor = "";
+			removeHorrorText();
+		} else {
+			// чорний екран + текст
+			document.body.style.backgroundColor = "black";
+			showRandomText();
+
+			moveGhostsToPacman();
+
+			setTimeout(() => {
+				restoreGhosts();
+			}, 1000);
+		}
+
+	}, 1000); // кожну секунду
+}
 
 			let pacman = {
 				x: 1 * cellSize + cellSize / 2, // Початкові координати Pac-Man (центр клітинки)
@@ -187,22 +241,104 @@ let ghost3Active = false;
 			}
 
 			// Оновлення гри
-	function triggerLookAtPlayer() {
-	if (lookAtPlayer) return;
+			function triggerStareMode() {
+	if (stareMode || horrorMode) return;
 
+	stareMode = true;
 	lookAtPlayer = true;
 	gameFrozen = true;
 
-	// міняємо фон сторінки
-	document.body.style.backgroundColor = "black";
+	setTimeout(() => {
+		stareMode = false;
+		lookAtPlayer = false;
+		gameFrozen = false;
+	}, 5000);
+}
+function triggerLookAtPlayer() {
+	if (horrorMode || stareMode || score < SETTINGS.horror.minScore) return;
+
+	horrorMode = true;
+	lookAtPlayer = true;
+	gameFrozen = true;
+
+	
+	startHorrorEffects();
 
 	setTimeout(() => {
+		horrorMode = false;
 		lookAtPlayer = false;
 		gameFrozen = false;
 
+		// повертаємо привидів назад
+		ghost1.x = ghostStartPositions[0].x;
+		ghost1.y = ghostStartPositions[0].y;
+
+		ghost2.x = ghostStartPositions[1].x;
+		ghost2.y = ghostStartPositions[1].y;
+
+		ghost3.x = ghostStartPositions[2].x;
+		ghost3.y = ghostStartPositions[2].y;
+
+		clearInterval(horrorInterval);
 		document.body.style.backgroundColor = "";
-	}, 5000);
+
+		removeHorrorText();
+
+	}, 10000);
 }
+function moveGhostsToPacman() {
+	[ghost1, ghost2, ghost3].forEach(g => {
+		if (!g) return;
+
+		g.x += (pacman.x - g.x) * 0.5;
+		g.y += (pacman.y - g.y) * 0.5;
+	});
+}
+
+function restoreGhosts() {
+	ghost1.x = ghostStartPositions[0].x;
+	ghost1.y = ghostStartPositions[0].y;
+
+	if (ghost2Active) {
+		ghost2.x = ghostStartPositions[1].x;
+		ghost2.y = ghostStartPositions[1].y;
+	}
+
+	if (ghost3Active) {
+		ghost3.x = ghostStartPositions[2].x;
+		ghost3.y = ghostStartPositions[2].y;
+	}
+}
+function drawBlackScreen() {
+	ctx.fillStyle = "black";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+function showRandomText() {
+	removeHorrorText();
+
+	let text = horrorTexts[Math.floor(Math.random() * horrorTexts.length)];
+
+	let div = document.createElement("div");
+	div.id = "horrorText";
+	div.innerText = text;
+
+	div.style.position = "fixed";
+	div.style.top = "50%";
+	div.style.left = "50%";
+	div.style.transform = "translate(-50%, -50%)";
+	div.style.color = "red";
+	div.style.fontSize = "30px";
+	div.style.fontFamily = "Arial";
+	div.style.zIndex = "9999";
+
+	document.body.appendChild(div);
+}
+
+function removeHorrorText() {
+	let old = document.getElementById("horrorText");
+	if (old) old.remove();
+}
+
 			function update() {
 				ctx.clearRect(0, 0, canvas.width, canvas.height); // Очищаємо канвас
 				drawMaze(); // Малюємо лабіринт
@@ -252,6 +388,9 @@ if (ghost3Active) {
 	drawGhost3();
 	checkGhost3();
 }
+if (horrorMode && document.body.style.backgroundColor === "black") {
+	drawBlackScreen();
+}
 			}
 			// Обробник клавіш для зміни напрямку руху
 			document.addEventListener("keydown", function (event) {
@@ -282,6 +421,7 @@ if (ghost3Active) {
 
 
 }
+
 function drawGhost2() {
 	ctx.beginPath();
 	ctx.arc(ghost2.x, ghost2.y, ghost2.radius, 0, Math.PI*2);
@@ -504,12 +644,39 @@ function gameOver() {
 		ghost3Active = true;
 	}
 }
+function triggerStareMode() {
+	if (stareMode || horrorMode || score < SETTINGS.stare.minScore) return;
 
+	stareMode = true;
+	lookAtPlayer = true;
+	gameFrozen = true;
+
+	setTimeout(() => {
+		stareMode = false;
+		lookAtPlayer = false;
+		gameFrozen = false;
+	}, 5000);
+}
 setInterval(() => {
-	if (Math.random() < 0.2) {
+	if (
+		!horrorMode &&
+		!stareMode &&
+		score >= SETTINGS.stare.minScore &&
+		Math.random() < SETTINGS.stare.chance
+	) {
+		triggerStareMode();
+	}
+}, SETTINGS.stare.interval);
+setInterval(() => {
+	if (
+		!horrorMode &&
+		!stareMode &&
+		score >= SETTINGS.horror.minScore &&
+		Math.random() < SETTINGS.horror.chance
+	) {
 		triggerLookAtPlayer();
 	}
-}, 4000);// Використовуємо setInterval для періодичного оновлення гри
+}, SETTINGS.horror.interval);
 
             setInterval(spawnFruit, 5000);
 
