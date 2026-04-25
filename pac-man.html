@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Pac-man</title>
+		<style>
+			canvas {
+			    border: 1px solid black; /* Додаємо чорну рамку до canvas для видимості */
+			    background-color: lightgrey; /* Даємо ледь сірий фон, щоб краще було видно жовтого пакмена */
+			}
+			#score, #record {
+			    font-size: 20px;
+			    font-family: Arial, sans-serif;
+			    margin-top: 10px;
+			}
+		</style>
+	</head>
+	<body>
+		<canvas id="canvas" width="300" height="300"></canvas>
+		<div id="score">Score: 0</div>
+        <div id="record">Record: 0</div>
+		<!-- Визначаємо канвас для гри -->
+		<script>
+			const canvas = document.getElementById("canvas"); // Отримуємо елемент canvas
+			const ctx = canvas.getContext("2d"); // Отримуємо контекст для малювання на canvas
+
+			const cellSize = 20; // Розмір клітинки в лабіринті
+			const rows = 15 ; // Кількість рядків в лабіринті
+			const cols = 15; // Кількість стовпців в лабіринті
+
+			// Лабіринт: 0 - вільний простір, 1 - стіна
+			const maze = [
+				[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ],
+				[1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, ],
+				[1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, ],
+				[1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, ],
+				[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, ],
+				[1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, ],
+				[1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, ],
+				[1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, ],
+				[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, ],
+				[1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, ],
+                [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, ],
+				[1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, ],
+				[1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, ],
+				[1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
+				[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ],
+				
+			];
+let lookAtPlayer = false;
+let gameFrozen = false;
+let fruit =[]
+let ghost1 = {
+	x: 8 * cellSize + cellSize / 2,
+	y: 1 * cellSize + cellSize / 2,
+    radius: 10,
+	direction: "right",
+	speed: cellSize,
+};
+
+let ghost2 = {
+	x: 1 * cellSize + cellSize / 2,
+	y: 13 * cellSize + cellSize / 2,
+    radius: 10,
+	direction: "right",
+	speed: cellSize,
+};
+
+
+let ghost3 = {
+	x: 13 * cellSize + cellSize / 2,
+	y: 13 * cellSize + cellSize / 2,
+    radius: 10,
+	direction: "right",
+	speed: cellSize,
+};
+let ghost2Active = false;
+let ghost3Active = false;
+
+			let pacman = {
+				x: 1 * cellSize + cellSize / 2, // Початкові координати Pac-Man (центр клітинки)
+				y: 1 * cellSize + cellSize / 2,
+				radius: 10, // Розмір Pac-Man
+				direction: "right", // Початковий напрямок руху (право)
+				speed: cellSize, // Швидкість руху, рівна розміру клітинки
+			};
+ var score = 0;
+			var record = localStorage.getItem("record")
+				? parseInt(localStorage.getItem("record"))
+				: 0; // зберігаємо рекорд
+
+            var drawScore = function () {
+				ctx.font = "20px Courier";
+				ctx.fillStyle = "Black";
+				ctx.textAlign = "left";
+				ctx.textBaseline = "top";
+				var sss = document.getElementById("score");
+				var rrr = document.getElementById("record");
+				sss.innerHTML = `Score: ${score}`;
+				rrr.innerHTML = `Record: ${record}`;
+			};
+
+			// Функція для малювання лабіринту
+			function drawMaze() {
+				for (let row = 0; row < rows; row++) {
+					for (let col = 0; col < cols; col++) {
+						if (maze[row][col] === 1) {
+							ctx.fillStyle = "blue"; // Колір стін
+							ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize); // Малюємо стіну
+						}
+					}
+				}
+			}
+        
+			// Функція для малювання Pac-Man
+			function drawPacman() {
+				ctx.beginPath(); // Початок малювання фігури
+
+				// Початкові кути для відкриття рота (право)
+				let startAngle = 0.25 * Math.PI;
+				let endAngle = 1.75 * Math.PI;
+				if (lookAtPlayer) {
+	ctx.beginPath();
+	ctx.arc(pacman.x, pacman.y, pacman.radius, 0, Math.PI * 2);
+	ctx.fillStyle = "yellow";
+	ctx.fill();
+
+	// очі дивляться прямо (на гравця)
+	ctx.beginPath();
+	ctx.arc(pacman.x - 5, pacman.y - 5, 4, 0, Math.PI * 2);
+	ctx.arc(pacman.x + 5, pacman.y - 5, 4, 0, Math.PI * 2);
+	ctx.fillStyle = "black";
+	ctx.fill();
+
+	ctx.beginPath();
+	ctx.arc(pacman.x - 5, pacman.y - 5, 1, 0, Math.PI * 2);
+	ctx.arc(pacman.x + 5, pacman.y - 5, 1, 0, Math.PI * 2);
+	ctx.fillStyle = "red";
+	ctx.fill();
+
+	return; // не малюємо рот і напрямок
+}
+
+				// Якщо напрямок вліво, змінюємо кути відкриття рота
+				if (pacman.direction === "left") {
+					startAngle = Math.PI + 0.25 * Math.PI;
+					endAngle = Math.PI + 1.75 * Math.PI;
+				}
+
+                if (pacman.direction === "up") {
+					startAngle = Math.PI + 0.75 * Math.PI;
+					endAngle = Math.PI + 2.2 * Math.PI;
+				}
+
+                if (pacman.direction === "down") {
+					startAngle = 0.75 * Math.PI;
+					endAngle = 2.2 * Math.PI;
+				}
+
+				// Малюємо Pac-Man з вказаними кутами
+				ctx.arc(pacman.x, pacman.y, pacman.radius, startAngle, endAngle);
+				ctx.lineTo(pacman.x, pacman.y); // Завершуємо шлях до центру
+				ctx.fillStyle = "yellow"; // Колір Pac-Man
+				ctx.fill(); // Заповнюємо фігуру
+				ctx.closePath(); // Завершуємо малювання
+
+				// Малюємо око
+				const eyeX = pacman.direction === "left" ? pacman.x + 5 : pacman.x - 5; // Око змінює свою позицію в залежності від напрямку
+				const eyeY = pacman.direction === "up" ? pacman.y +5 : pacman.y - 5 ;
+				const eyeRadius = 2; // Розмір ока
+
+				// Малюємо око
+				ctx.beginPath();
+				ctx.arc(eyeX, eyeY, eyeRadius, 0, 2 * Math.PI);
+				ctx.fillStyle = "black"; // Колір ока
+				ctx.fill(); // Заповнюємо око
+				ctx.closePath(); // Завершуємо малювання ока
+			}
+
+
+			// Функція для перевірки, чи можна зробити рух в нову позицію
+			function isValidMove(newX, newY) {
+				const gridX = Math.floor(newX / cellSize); // Переводимо координати в клітинки лабіринту
+				const gridY = Math.floor(newY / cellSize);
+				return maze[gridY] && maze[gridY][gridX] === 0; // Перевіряємо, чи клітинка не є стіною
+			}
+
+			// Оновлення гри
+	function triggerLookAtPlayer() {
+	if (lookAtPlayer) return;
+
+	lookAtPlayer = true;
+	gameFrozen = true;
+
+	// міняємо фон сторінки
+	document.body.style.backgroundColor = "black";
+
+	setTimeout(() => {
+		lookAtPlayer = false;
+		gameFrozen = false;
+
+		document.body.style.backgroundColor = "";
+	}, 5000);
+}
+			function update() {
+				ctx.clearRect(0, 0, canvas.width, canvas.height); // Очищаємо канвас
+				drawMaze(); // Малюємо лабіринт
+				drawPacman(); // Малюємо Pac-Man
+				drawFruits();
+				drawScore();
+				drawGhost1();
+				unlockGhosts();
+		
+			
+
+				// Рух Pac-Man, залежно від напрямку
+		if (!gameFrozen) {
+	let newX = pacman.x;
+	let newY = pacman.y;
+
+	if (pacman.direction === "right") newX += pacman.speed;
+	if (pacman.direction === "left") newX -= pacman.speed;
+	if (pacman.direction === "up") newY -= pacman.speed;
+	if (pacman.direction === "down") newY += pacman.speed;
+
+	if (isValidMove(newX, newY)) {
+		pacman.x = newX;
+		pacman.y = newY;
+	}
+
+				// Перевіряємо, чи можна перемістити Pac-Man в нову позицію
+				if (isValidMove(newX, newY)) {
+					pacman.x = newX; // Оновлюємо координати
+					pacman.y = newY;
+				}
+				checkFruit();
+			if (!gameFrozen) {
+	moveGhost1();
+	if (ghost2Active) moveGhost2();
+	if (ghost3Active) moveGhost3();
+}
+}
+checkGhost1();
+
+if (ghost2Active) {
+	drawGhost2();
+	checkGhost2();
+}
+
+if (ghost3Active) {
+	drawGhost3();
+	checkGhost3();
+}
+			}
+			// Обробник клавіш для зміни напрямку руху
+			document.addEventListener("keydown", function (event) {
+				if (event.key === "ArrowRight") pacman.direction = "right"; // Якщо натиснута стрілка вправо
+				if (event.key === "ArrowLeft") pacman.direction = "left"; // Якщо натиснута стрілка вліво
+				if (event.key === "ArrowUp") pacman.direction = "up"; // Якщо натиснута стрілка вгору
+				if (event.key === "ArrowDown") pacman.direction = "down"; // Якщо натиснута стрілка вниз
+			});let fruits = [];
+   function drawGhost1() {
+	ctx.beginPath();
+	ctx.arc(ghost1.x, ghost1.y, ghost1.radius, 0, Math.PI*2);
+	ctx.fillStyle = "white";
+	ctx.fillStroke = "black";
+	ctx.fill();
+	ctx.stroke();
+
+	ctx.beginPath();
+	ctx.arc(ghost1.x - 4, ghost1.y - 4, 2, 0, 2*Math.PI);
+    ctx.arc(ghost1.x + 4, ghost1.y - 4, 2, 0, 2*Math.PI);
+	ctx.fillStyle = "black";
+	ctx.fill();
+
+	ctx.beginPath();
+	ctx.arc(ghost1.x, ghost1.y, ghost1.radius-3, 0, Math.PI);
+	ctx.lineTo(ghost1.x, ghost1.y);
+	ctx.fillStyle = "red";
+	ctx.fill();
+
+
+}
+function drawGhost2() {
+	ctx.beginPath();
+	ctx.arc(ghost2.x, ghost2.y, ghost2.radius, 0, Math.PI*2);
+	ctx.fillStyle = "white";
+	ctx.fillStroke = "black";
+	ctx.fill();
+	ctx.stroke();
+
+	ctx.beginPath();
+	ctx.arc(ghost2.x - 4, ghost2.y - 4, 2, 0, 2*Math.PI);
+    ctx.arc(ghost2.x + 4, ghost2.y - 4, 2, 0, 2*Math.PI);
+	ctx.fillStyle = "black";
+	ctx.fill();
+
+	ctx.beginPath();
+	ctx.arc(ghost2.x, ghost2.y, ghost2.radius-5, 0, Math.PI);
+	ctx.lineTo(ghost2.x, ghost2.y);
+	ctx.fillStyle = "green";
+	ctx.fill();
+
+
+}
+function drawGhost3() {
+	ctx.beginPath();
+	ctx.arc(ghost3.x, ghost3.y, ghost3.radius, 0, Math.PI*2);
+	ctx.fillStyle = "white";
+	ctx.fillStroke = "black";
+	ctx.fill();
+	ctx.stroke();
+
+	ctx.beginPath();
+	ctx.arc(ghost3.x - 4, ghost3.y - 4, 2, 0, 2*Math.PI);
+    ctx.arc(ghost3.x + 4, ghost3.y - 4, 2, 0, 2*Math.PI);
+	ctx.fillStyle = "black";
+	ctx.fill();    
+
+	ctx.beginPath();
+	ctx.arc(ghost3.x, ghost3.y+4, ghost3.radius-5, 0, Math.PI, true);
+	ctx.fillStyle = "purple";
+	ctx.fill();
+
+
+}
+   function moveGhost1() {
+	const dirs = ["up","down","left","right"];
+	let dir = dirs[Math.floor(Math.random()*4)];
+
+	let nx = ghost1.x;
+	let ny = ghost1.y;
+
+	if (dir === "right") nx += cellSize;
+	if (dir === "left") nx -= cellSize;
+	if (dir === "up") ny -= cellSize;
+	if (dir === "down") ny += cellSize;
+
+	if (isValidMove(nx, ny)) {
+		ghost1.x = nx;
+		ghost1.y = ny;
+	}
+}
+   function moveGhost2() {
+	const dirs = ["up","down","left","right"];
+	let dir = dirs[Math.floor(Math.random()*4)];
+
+	let nx = ghost2.x;
+	let ny = ghost2.y;
+
+	if (dir === "right") nx += cellSize;
+	if (dir === "left") nx -= cellSize;
+	if (dir === "up") ny -= cellSize;
+	if (dir === "down") ny += cellSize;
+
+	if (isValidMove(nx, ny)) {
+		ghost2.x = nx;
+		ghost2.y = ny;
+	}
+}
+ function moveGhost3() {
+	const dirs = ["up","down","left","right"];
+	let dir = dirs[Math.floor(Math.random()*4)];
+
+	let nx = ghost3.x;
+	let ny = ghost3.y;
+
+	if (dir === "right") nx += cellSize;
+	if (dir === "left") nx -= cellSize;
+	if (dir === "up") ny -= cellSize;
+	if (dir === "down") ny += cellSize;
+
+	if (isValidMove(nx, ny)) {
+		ghost3.x = nx;
+		ghost3.y = ny;
+	}
+}
+
+
+   function isColliding(a, b) {
+	let distance = Math.hypot(a.x - b.x, a.y - b.y);
+	return distance < a.radius + b.radius;
+}
+	
+
+  
+		
+  function checkGhost1() {
+	if (isColliding(pacman, ghost1)) {
+		gameOver();
+	}
+}
+
+function checkGhost2() {
+	if (isColliding(pacman, ghost2)) {
+		gameOver();
+	}
+}
+
+function checkGhost3() {
+	if (isColliding(pacman, ghost3)) {
+		gameOver();
+	}
+}
+function gameOver() {
+	alert("Game Over! Score: " + score);
+	updateRecord();
+	location.reload();
+}
+	function updateRecord() {
+				if (score > record) {
+					localStorage.setItem("record", score);
+				}
+			}
+		
+// spawn fruits
+   setInterval(() => {
+	let row, col;
+	do {
+		row = Math.floor(Math.random() * rows);
+		col = Math.floor(Math.random() * cols);
+	} while (maze[row][col] !== 0);
+
+	if(fruits.length<=5){
+			fruits.push({
+		x: col * cellSize + cellSize / 2,
+		y: row * cellSize + cellSize / 2
+	});
+	}
+
+}, 5000);
+
+   function drawFruits() {
+	  fruits.forEach(f => {
+		ctx.beginPath();
+		ctx.arc(f.x, f.y, 6, 0, 2*Math.PI);
+		ctx.fillStyle = "green";
+		ctx.fill();
+	});
+	function drawScore() {
+	ctx.fillStyle = "white";
+	ctx.font = "18px Arial";
+	ctx.fillText("Score: " + score, 10, 20);
+}
+   }function checkFruit() {
+	  fruits = fruits.filter(f => {
+		let d = Math.hypot(pacman.x - f.x, pacman.y - f.y);
+		if (d < 20) {
+			score += 10;
+			pacman.isEating = true; // Встановлюємо прапор для відображення жовтого круга
+			setTimeout(() => (pacman.isEating = false), 200); // Повертаємо вигляд Pac-Man через 200 мс			
+			return false;
+		}
+		return true;
+	});
+
+}   
+     function detectFruitCollision() {
+				for (let i = 0; i < fruits.length; i++) {
+					let fruit = fruits[i];
+					let distance = Math.hypot(pacman.x - fruit.x, pacman.y - fruit.y);
+					if (distance < pacman.radius + fruit.radius) {
+						// З'їдений фрукт
+						fruits.splice(i, 1); // Видаляємо фрукт
+						score++;
+						pacman.isEating = true; // Встановлюємо прапор для відображення жовтого круга
+						setTimeout(() => (pacman.isEating = false), 200); // Повертаємо вигляд Pac-Man через 200 мс
+						updateScore();
+						break;
+					}
+				}
+			}
+			
+			function updateScore() {
+				document.getElementById("score").textContent = `Score: ${score}`;
+			}
+				function spawnFruit() {
+    let validPosition = false;
+    let x, y;
+
+    while (!validPosition) {
+        let col = Math.floor(Math.random() * cols);
+        let row = Math.floor(Math.random() * rows);
+
+        // Перевіряємо, чи це не стіна
+        if (maze[row][col] === 0) {
+            x = col * cellSize + cellSize / 2;
+            y = row * cellSize + cellSize / 2;
+
+            // Перевірка, щоб фрукт не з'явився прямо на Pac-Man
+            let distance = Math.hypot(pacman.x - x, pacman.y - y);
+            if (distance > cellSize) {
+                validPosition = true;
+            }
+        }
+    }
+
+} function unlockGhosts() {
+	if (score >= 70) {
+		ghost2Active = true;
+	}
+	if (score >= 150) {
+		ghost3Active = true;
+	}
+}
+
+setInterval(() => {
+	if (Math.random() < 0.2) {
+		triggerLookAtPlayer();
+	}
+}, 4000);// Використовуємо setInterval для періодичного оновлення гри
+
+            setInterval(spawnFruit, 5000);
+
+			setInterval(update,200); // Оновлення гри кожні 200 мілісекунд
+		
+		</script>
+	</body>
+</html>
